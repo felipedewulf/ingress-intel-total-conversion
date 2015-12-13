@@ -89,6 +89,7 @@ window.plugin.trackowners.onPortalDetailsUpdated = function() {
  // plugin.trackowners.updateChecksAndHighlights(guid);
 }
 
+
 window.plugin.trackowners.onPublicChatDataAvailable = function(data) {
   console.log("Trackowner: Lop new messages");
   data.result.forEach(function(msg) {
@@ -125,8 +126,20 @@ window.plugin.trackowners.checkSeenPortal = function(portal) {   // owned, guid,
 	}
 	
 	var trackedPortal = plugin.trackowners.trackowners[guid];
-	
+
 	if (trackedPortal){
+        if (trackedPortal.latE6!= portal.options.data.latE6 ||
+            trackedPortal.lngE6!= portal.options.data.lngE6 ||
+            (portal.options.data.title && trackedPortal.title!= portal.options.data.title)){
+            console.log("  -- TrackOwners: Updated lat/lng/tilte infos: ",trackedPortal,portal.options);
+            trackedPortal.latE6 = portal.options.data.latE6;
+            trackedPortal.lngE6 = portal.options.data.lngE6;
+            if (portal.options.data.title) {
+                trackedPortal.title = portal.options.data.title;
+            }
+            plugin.trackowners.pushGuidByCoord(guid, trackedPortal.latE6, trackedPortal.lngE6);
+            plugin.trackowners.sync(guid);
+        }
 		//console.log("TrackOwners: Portal Already Seen:",trackedPortal);
 		if (trackedPortal.team==portal.options.data.team){
 			// Still the same team
@@ -145,7 +158,7 @@ window.plugin.trackowners.checkSeenPortal = function(portal) {   // owned, guid,
 				}
 			}
 		}else{  // Portal changed ownership
-			console.log("TrackOwners: Portal Changed Ownership",trackedPortal);
+			console.log("TrackOwners: Portal Changed Ownership",trackedPortal,portal.options);
 			// Portal with timestamp - (fakeportal), or old timestamp, is ignored.
 			// TODO consider fakeportals to reset Capture date and team. But with wich timestamp?
 			if (portal.options.timestamp>trackedPortal.capturedTS && portal.options.timestamp<=trackedPortal.seenTS){
