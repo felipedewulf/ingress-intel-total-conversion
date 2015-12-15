@@ -111,9 +111,9 @@ window.plugin.trackowners.onPublicChatDataAvailable = function(data) {
         newowner = markup[0][1].plain;
 		guid = window.findPortalGuidByPositionE6(portal.latE6, portal.lngE6);	
 		if (!guid){
-			
+			guid = window.plugin.trackowners.getGuidByCoord(portal.latE6, portal.lngE6);
 		}
-		
+		window.plugin.trackowners.addNewCapturedPortal(guid, newowner,msgTS, portal);
     }	
   });
 }
@@ -185,6 +185,72 @@ window.plugin.trackowners.checkSeenPortal = function(portal) {   // owned, guid,
 	
 // Primary:  latE6, lngE6, team, capturedTS, lastSeenTS, precision (SEEN, CAPTURED)
 // Secondary: health, level, resocount, title, owner
+
+window.plugin.trackowners.addNewCapturedPortal = function(guid, newowner,newCapTS, portal) {
+	if(!guid){
+		console.log("TrackOwners: Error. addNewCapcturedPortal with invalid guid:",portal);
+		return;
+	}
+
+	var trackedPortal = plugin.trackowners.trackowners[guid];
+
+	if (trackedPortal){
+ 		var newCapTeam="-";
+		if (portal.team && portal.team.length>1 ){
+			newCapTeam=portal.team.charAt(0);
+		}
+		if (newCapTeam!="E" && newCapTeam!="R"){
+			console.log("TrackOwners: Error. addNewCapcturedPortal invalid Team:",portal);
+			return;
+		}
+
+		// If portal Captured after last seenTS, (seenTS < newCapTS), define new Capture
+		// Else if portal Captured after last capturedTS ( capturedTS < newCapTS) :
+		//			and on the same team, update capturedTS <- newCapTS
+		//          else (other team), set as SEEN, and capturedTS <- seenTS
+		// Else (newCapTS < capTS) and SEEN and on the same team, capturedTS <- newCapTS
+		//  TODO Check to update Lat/Lng and Title ?
+		if ((trackedPortal.seenTS < newCapTS)||(trackedPortal.seenTS == newCapTS && trackedPortal.type=="SEEN")){
+			console.log("TrackOwners: New Portal Captured by:"+newowner,portal);
+			trackedPortal.seenTS= newCapTS;
+			trackedPortal.capturedTS = newCapTS;
+			trackedPortal.team=newCapTeam;
+			trackedPortal.type="CAPTURED";
+			trackedPortal.owner=newowner;
+			trackedPortal.health=null;
+			trackedPortal.level=null;
+			plugin.trackowners.sync(guid);
+		}else if ((trackedPortal.capturedTS < newCapTS )||(trackedPortal.capturedTS == newCapTS && trackedPortal.type=="SEEN")){
+			if (trackedPortal.team==newCapTeam){
+				console.log("TrackOwners: Portal Already Seen. updated Captured by:"+newowner,portal, trackedPortal);
+				trackedPortal.capturedTS = newCapTS;
+				trackedPortal.type="CAPTURED";
+				trackedPortal.owner=newowner;
+				plugin.trackowners.sync(guid);
+			}else{
+				console.log("TrackOwners: New Portal Already Seen. But Captured inbetween by:"+newowner,portal, trackedPortal);
+				trackedPortal.capturedTS = trackedPortal.seenTS;
+				trackedPortal.team=newCapTeam;
+				trackedPortal.type="SEEN";
+				trackedPortal.owner=null;
+				trackedPortal.health=null;
+				trackedPortal.level=null;
+				plugin.trackowners.sync(guid);
+			}
+		}else{
+			if (trackedPortal.type=="SEEN" && trackedPortal.team==newCapTeam){
+				console.log("TrackOwners: New Portal Captured when was alrady Seen.:"+newowner,portal, trackedPortal);
+				trackedPortal.capturedTS = newCapTS;
+				trackedPortal.type="CAPTURED";
+				trackedPortal.owner=newowner;
+				plugin.trackowners.sync(guid);
+			}
+		}
+
+	}else{
+		console.log("TrackOwners: Error. addNewCapcturedPortal couldnt find guid portal:"+guid+" of "+portal);
+	}
+}
 
 window.plugin.trackowners.addNewSeenPortal = function(guid, portal){
 	var newPortal = {
