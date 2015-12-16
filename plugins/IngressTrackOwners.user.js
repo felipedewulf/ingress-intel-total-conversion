@@ -73,17 +73,28 @@ window.plugin.trackowners.onPortalAddLayer = function(addedPortal) {
   } 
 }
 
-window.plugin.trackowners.onPortalDetailsUpdated = function() {
+window.plugin.trackowners.onPortalDetailsUpdated = function(callbackData) {
 
+	console.log("Portal Details Updated:",callbackData);
   // Alert user if there is no storage available
   if(typeof(Storage) === "undefined"){
     $('#portaldetails > .imgpreview').after(plugin.trackowners.disabledMessage);
     return;
   }
-  
-  var guid = window.selectedPortal,
-      details = portalDetail.get(guid),
-      nickname = window.PLAYER.nickname;
+
+	// Imported from portalowner
+ // var guid = window.selectedPortal,
+  //    details = portalDetail.get(guid),
+   //   nickname = window.PLAYER.nickname;
+
+	var guid     = callbackData.guid,
+		details  = callbackData.portalDetails,
+		seenTS = details.timestamp,
+		nickname = window.PLAYER.nickname;
+
+
+	console.log("Portal Details Updated:"+seenTS,guid,details);
+
 
  // Update portal-list data
  // plugin.trackowners.updateChecksAndHighlights(guid);
