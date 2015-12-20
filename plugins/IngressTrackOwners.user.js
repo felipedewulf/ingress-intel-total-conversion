@@ -69,13 +69,15 @@ window.plugin.trackowners.onPortalAddLayer = function(addedPortal) {
   portal=addedPortal.portal;
   if (portal){
     console.log("trackowners: NewPortal Added:"+addedPortal.portal.options.data.title);
-    plugin.trackowners.checkSeenPortal(portal);
+	guid = portal.options.guid;
+	newTS = portal.options.timestamp;
+    plugin.trackowners.checkSeenPortal(guid, newTS, portal.options.data);
   } 
 }
 
 window.plugin.trackowners.onPortalDetailsUpdated = function(callbackData) {
 
-	console.log("Portal Details Updated:",callbackData);
+  //console.log("Portal Details Updated:",callbackData);
   // Alert user if there is no storage available
   if(typeof(Storage) === "undefined"){
     $('#portaldetails > .imgpreview').after(plugin.trackowners.disabledMessage);
@@ -94,7 +96,7 @@ window.plugin.trackowners.onPortalDetailsUpdated = function(callbackData) {
 
 
 	console.log("Portal Details Updated:"+seenTS,guid,details);
-
+	plugin.trackowners.checkSeenPortal(guid, seenTS, details);
 
  // Update portal-list data
  // plugin.trackowners.updateChecksAndHighlights(guid);
@@ -120,74 +122,147 @@ window.plugin.trackowners.onPublicChatDataAvailable = function(data) {
         // Player has captured a portal within the bounded area
         portal = markup[2][1];
         newowner = markup[0][1].plain;
-		guid = window.findPortalGuidByPositionE6(portal.latE6, portal.lngE6);	
-		if (!guid){
-			guid = window.plugin.trackowners.getGuidByCoord(portal.latE6, portal.lngE6);
-		}
+		guid  = window.plugin.trackowners.searchGuidByCoord(portal.latE6, portal.lngE6);
 		window.plugin.trackowners.addNewCapturedPortal(guid, newowner,msgTS, portal);
-    }	
+    } else if(plext.plextType == 'SYSTEM_BROADCAST'
+		 && markup.length==3
+		 && markup[0][0] == 'PLAYER'
+		 && markup[1][0] == 'TEXT'
+		 && markup[1][1].plain == ' deployed a Resonator on '
+		 && markup[2][0] == 'PORTAL') {
+		 // search for "x deployed a Resonator on z"
+		 var portal = markup[2][1];
+		 guid  = window.plugin.trackowners.searchGuidByCoord(portal.latE6, portal.lngE6);
+		 console.log("Trackowner: Portal seen by -deployed a Resonator on- "+guid+" ts ",msgTS, portal);
+		 plugin.trackowners.checkSeenPortal(guid, msgTS, portal);
+	 } else if(plext.plextType == 'SYSTEM_BROADCAST'
+		 && markup.length==3
+		 && markup[0][0] == 'PLAYER'
+		 && markup[1][0] == 'TEXT'
+		 && markup[1][1].plain == ' destroyed a Resonator on '
+		 && markup[2][0] == 'PORTAL') {
+		 // search for "x destroyed a Resonator on z"
+		 // When Destroyed a resonator due to Jarvis or ADA:
+		 //
+		 var portal = markup[2][1];
+		 guid  = window.plugin.trackowners.searchGuidByCoord(portal.latE6, portal.lngE6);
+		 console.log("Trackowner: Portal seen by -destroyed a Resonator on- "+guid+" ts ",msgTS, portal);
+		 plugin.trackowners.checkSeenPortal(guid, msgTS, portal);
+	 } else if(plext.plextType == 'SYSTEM_BROADCAST'
+		 && markup.length==5
+		 && markup[0][0] == 'PLAYER'
+		 && markup[1][0] == 'TEXT'
+		 && markup[1][1].plain == ' linked '
+		 && markup[2][0] == 'PORTAL'
+		 && markup[3][0] == 'TEXT'
+		 && markup[3][1].plain == ' to '
+		 && markup[4][0] == 'PORTAL') {
+		 // search for "x linked y to z"
+		 var portal1 = markup[2][1];
+		 var portal2 = markup[4][1];
+		 var guid1  = window.plugin.trackowners.searchGuidByCoord(portal1.latE6, portal1.lngE6);
+		 var guid2  = window.plugin.trackowners.searchGuidByCoord(portal2.latE6, portal2.lngE6);
+		 console.log("Trackowner: Portal seen by -linked portal  - "+guid1, portal1);
+		 console.log("Trackowner: Portal seen by -to portal- "+guid2, portal2);
+		 plugin.trackowners.checkSeenPortal(guid1, msgTS, portal1);
+		 plugin.trackowners.checkSeenPortal(guid2, msgTS, portal2);
+	 }
   });
 }
-	
-window.plugin.trackowners.checkSeenPortal = function(portal) {   // owned, guid, portal, captureTS
-	guid = portal.options.guid;
+window.plugin.trackowners.searchGuidByCoord = function (platE6, plngE6){
+	var guid = window.findPortalGuidByPositionE6(platE6, plngE6);
+	if (!guid){
+		guid = window.plugin.trackowners.getGuidByCoord(platE6,plngE6);
+	}
+	return guid;
+}
+
+window.plugin.trackowners.checkSeenPortal = function(guid, newTS, newPortalDetails) {   // owned, guid, portal, captureTS
+
 	if(!guid){
-		console.log("TrackOwners: Error. checkSeen with invalid guid:"+portal);
+		console.log("TrackOwners: Error. checkSeen with invalid guid:"+newPortalDetails);
 		return;
 	}
-	
+	if (newPortalDetails.team && newPortalDetails.team.length>1 ){
+		newPortalDetails.team=newPortalDetails.team.charAt(0);
+	}
+	if (newPortalDetails.team!="E" && newPortalDetails.team!="R" && newPortalDetails.team!="N" ){
+		console.log("TrackOwners: Error. checkSeenPortal invalid Team:",newPortalDetails);
+		return;
+	}
+
 	var trackedPortal = plugin.trackowners.trackowners[guid];
 
 	if (trackedPortal){
-        if (trackedPortal.latE6!= portal.options.data.latE6 ||
-            trackedPortal.lngE6!= portal.options.data.lngE6 ||
-            (portal.options.data.title && trackedPortal.title!= portal.options.data.title)){
-            console.log("  -- TrackOwners: Updated lat/lng/tilte infos: ",trackedPortal,portal.options);
-            trackedPortal.latE6 = portal.options.data.latE6;
-            trackedPortal.lngE6 = portal.options.data.lngE6;
-            if (portal.options.data.title) {
-                trackedPortal.title = portal.options.data.title;
+        if (trackedPortal.latE6!= newPortalDetails.latE6 ||
+            trackedPortal.lngE6!= newPortalDetails.lngE6 ||
+            (newPortalDetails.title && trackedPortal.title!= newPortalDetails.title)){
+            console.log("  -- TrackOwners: Updated lat/lng/tilte infos: ",trackedPortal,newPortalDetails);
+            trackedPortal.latE6 = newPortalDetails.latE6;
+            trackedPortal.lngE6 = newPortalDetails.lngE6;
+            if (newPortalDetails.title) {
+                trackedPortal.title = newPortalDetails.title;
             }
             plugin.trackowners.pushGuidByCoord(guid, trackedPortal.latE6, trackedPortal.lngE6);
             plugin.trackowners.sync(guid);
         }
-		//console.log("TrackOwners: Portal Already Seen:",trackedPortal);
-		if (trackedPortal.team==portal.options.data.team){
+		if (trackedPortal.team.length>1){
+			trackedPortal.team=trackedPortal.team.charAt(0);
+			console.log("TrackOwners: FIXING. Portal Team Name:",trackedPortal);
+			plugin.trackowners.sync(guid);
+		}
+//		console.log("TrackOwners: Portal Already Seen:",trackedPortal);
+
+		// TODO check if the team remains the same, but changed the owner
+		if (trackedPortal.team==newPortalDetails.team){
 			// Still the same team
-			if ((portal.options.timestamp>0)){ // and not a fake portal
-				if (portal.options.timestamp<trackedPortal.capturedTS && trackedPortal.type=="SEEN"){
-					trackedPortal.capturedTS = portal.options.timestamp;
+			if (newTS>=trackedPortal.capturedTS && trackedPortal.type=="SEEN"){
+				if (newPortalDetails.owner && newPortalDetails.owner.length>1 ){
+					console.log("  -- TrackOwners: Updating owner to "+newPortalDetails.owner,trackedPortal);
+					trackedPortal.owner = newPortalDetails.owner;
+					plugin.trackowners.sync(guid);
+				}
+
+			}
+
+			if ((newTS>0)){ // and not a fake portal
+				if (newTS<trackedPortal.capturedTS && trackedPortal.type=="SEEN"){
+					trackedPortal.capturedTS = newTS;
 					console.log("  -- TrackOwners: Updated inicial Seen time:",trackedPortal);
 					plugin.trackowners.sync(guid);
 
-				}else if(portal.options.timestamp>trackedPortal.seenTS){
-					trackedPortal.seenTS = portal.options.timestamp;
-					trackedPortal.health = portal.options.data.health;
-					trackedPortal.level  = portal.options.data.level;
-					console.log("  -- TrackOwners: Updated final Seen time:",trackedPortal);					
+				}else if(newTS>trackedPortal.seenTS){
+					trackedPortal.seenTS = newTS;
+					trackedPortal.health = newPortalDetails.health;
+					trackedPortal.level  = newPortalDetails.level;
+					console.log("  -- TrackOwners: Updated final Seen time:",trackedPortal);
 					plugin.trackowners.sync(guid);
 				}
 			}
 		}else{  // Portal changed ownership
-			console.log("TrackOwners: Portal Changed Ownership",trackedPortal,portal.options);
+			// TODO bug: Virus dont show capture. Their Seen (Res. Destroyed) forces CapTS=SeenTS, missing the Virus.
+			// Ex.: Portal R  with Cap = 10 and Seen = 15.
+			// If   Virus E  seen at ts = 12, will force  Cap = Seen = 15.
+			// If   a link seen with R, at ts = 5, will set  Cap = 5, missing the Virus change.
+			console.log("TrackOwners: Portal Changed Ownership at ",newTS,trackedPortal,newPortalDetails);
 			// Portal with timestamp - (fakeportal), or old timestamp, is ignored.
 			// TODO consider fakeportals to reset Capture date and team. But with wich timestamp?
-			if (portal.options.timestamp>trackedPortal.capturedTS && portal.options.timestamp<=trackedPortal.seenTS){
+			if (newTS>trackedPortal.capturedTS && newTS<trackedPortal.seenTS){
 				// Portal was seen as a new team after tracked capture, but before last SEEN date. 
 				// So, consider last SEEN date as new Capture.
 				trackedPortal.capturedTS = trackedPortal.seenTS;
 				trackedPortal.type = "SEEN";
 				console.log("  -- TrackOwners: Portal changed between Capture and last Seen:",trackedPortal);					
-			}else if (portal.options.timestamp>trackedPortal.seenTS) {
+			}else if (newTS>trackedPortal.seenTS) {
 				// Portal was seen recently with new team.
-				console.log("  -- TrackOwners: Overwriting portal seen:",portal);
-				plugin.trackowners.addNewSeenPortal(guid,portal);				
+				console.log("  -- TrackOwners: Overwriting portal seen:",newPortalDetails);
+				plugin.trackowners.addNewSeenPortal(guid,newTS,newPortalDetails);
 			}
 		}
 	}else{
-		if (portal.options.timestamp>0){
-			console.log("Adding new portal seen:",portal);
-			plugin.trackowners.addNewSeenPortal(guid,portal);
+		if (newTS>0){
+			console.log("Adding new portal seen:",newPortalDetails);
+			plugin.trackowners.addNewSeenPortal(guid,newTS,newPortalDetails);
 		}else{
 			// console.log("TrackOwner: Ignoring fake Portal "+guid);
 		}
@@ -263,17 +338,17 @@ window.plugin.trackowners.addNewCapturedPortal = function(guid, newowner,newCapT
 	}
 }
 
-window.plugin.trackowners.addNewSeenPortal = function(guid, portal){
+window.plugin.trackowners.addNewSeenPortal = function(guid,newTS, newPortalDetails){
 	var newPortal = {
-		seenTS: portal.options.timestamp,
-		capturedTS: portal.options.timestamp,
-        team: portal.options.data.team,
-		title: portal.options.data.title,
+		seenTS: newTS,
+		capturedTS: newTS,
+        team: newPortalDetails.team,
+		title: newPortalDetails.title,
 		type: "SEEN",
-		health: portal.options.data.health,
-		level: portal.options.data.level,
-		latE6: portal.options.data.latE6,
-		lngE6: portal.options.data.lngE6
+		health: newPortalDetails.health,
+		level: newPortalDetails.level,
+		latE6: newPortalDetails.latE6,
+		lngE6: newPortalDetails.lngE6
       };
 	  plugin.trackowners.pushGuidByCoord(guid, newPortal.latE6, newPortal.lngE6);
 	  plugin.trackowners.trackowners[guid]=newPortal;
