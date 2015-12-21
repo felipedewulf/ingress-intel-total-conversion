@@ -1,4 +1,4 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @id             iitc-plugin-ownership
 // @name           IITC plugin: Ownership
 // @category       Misc
@@ -14,7 +14,17 @@
 // @grant          none
 // ==/UserScript==
 
-@@PLUGINSTART@@
+function wrapper(plugin_info) {
+// ensure plugin framework is there, even if iitc is not yet loaded
+if(typeof window.plugin !== 'function') window.plugin = function() {};
+
+//PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
+//(leaving them in place might break the 'About IITC' page or break update checks)
+plugin_info.buildName = 'test';
+plugin_info.dateTimeVersion = '201512087.154202';
+plugin_info.pluginId = 'PortalOwnership';
+//END PLUGIN AUTHORS NOTE
+
 //PLUGIN START ////////////////////////////////////////////////////////
 
 // Create unique plugin namespace
@@ -100,7 +110,8 @@ window.plugin.ownership.onPublicChatDataAvailable = function(data) {
         markup = plext.markup
         portal = null,
         guid = null,
-        owned = false;
+        owned = false,
+		msgTS = msg[1];
 
     if(plext.plextType == 'SYSTEM_BROADCAST'
 		  && markup.length==3
@@ -126,8 +137,13 @@ window.plugin.ownership.onPublicChatDataAvailable = function(data) {
 
     if(portal){
       guid = window.findPortalGuidByPositionE6(portal.latE6, portal.lngE6);
-      if(guid)
-        plugin.ownership.updateOwned(owned,guid,portal);
+	//  console.log(markup);
+      if(guid){
+		//console.log(msgTS+":ownership: Call Portal updated:"+guid+" owned:"+owned+".  Portal:"+portal);
+        plugin.ownership.updateOwned(owned,guid,portal,msgTS);
+	  } else {
+		//console.log(msgTS+"ownership: Portal update ignored. owned:"+owned+".  Portal Not found:"+portal);
+	  }
     }
   });
 }
@@ -145,11 +161,20 @@ window.plugin.ownership.updateChecksAndHighlights = function(guid) {
     window.setMarkerStyle (window.portals[guid], guid == window.selectedPortal);
 }
 
-window.plugin.ownership.updateOwned = function(owned, guid, portal) {
+window.plugin.ownership.updateOwned = function(owned, guid, portal, captureTS) {
   if(guid == undefined)
     guid = window.selectedPortal;
 
   var ownershipInfo = plugin.ownership.ownership[guid];
+ 
+  
+  if (captureTS && ownershipInfo && ownershipInfo.recordedDate &&  captureTS < ownershipInfo.recordedDate){
+	//  console.log("Ignoring update of portal "+guid+" because new TS "+captureTS+" is older than current one:"+ownershipInfo.recordedDate);
+	  return;
+  } else {
+	//  console.log("Updating portal: "+guid+" with new TS "+captureTS+" of portal:"); 
+  }
+  
   if(owned){ // If creating/updating an owned portal
     if(!ownershipInfo){ // Creating one that doesn't exist
       plugin.ownership.ownership[guid] = ownershipInfo = {
@@ -169,7 +194,7 @@ window.plugin.ownership.updateOwned = function(owned, guid, portal) {
         ownershipInfo.health = portal.health;
         ownershipInfo.level = portal.level;
         ownershipInfo.resonatorCount = portal.resCount;
-        ownershipInfo.recordedDate = Date.now();
+        ownershipInfo.recordedDate = (captureTS == undefined ? Date.now() : captureTS);
       }
       else { // One that is already owned and has information
         // Update with most recently known information
@@ -184,6 +209,7 @@ window.plugin.ownership.updateOwned = function(owned, guid, portal) {
     }
   }
   else { // Removing a portal as ownership has been removed
+    console.log("ownership: Delete Portal "+guid+" Owner "+ownershipInfo)
     if(ownershipInfo)
       delete plugin.ownership.ownership[guid];
   }
@@ -759,6 +785,7 @@ window.plugin.ownership.onPaneChanged = function(pane) {
 // Owned Portal List End
 
 var setup = function() {
+
   if($.inArray('pluginOwnershipUpdateOwnership', window.VALID_HOOKS) < 0)
     window.VALID_HOOKS.push('pluginOwnershipUpdateOwnership');
   if($.inArray('pluginOwnershipRefreshAll', window.VALID_HOOKS) < 0)
@@ -766,6 +793,7 @@ var setup = function() {
   window.plugin.ownership.setupCSS();
   window.plugin.ownership.setupContent();
   window.plugin.ownership.loadLocal('ownership');
+
 
   window.addHook('portalDetailsUpdated', window.plugin.ownership.onPortalDetailsUpdated);
   window.addHook('publicChatDataAvailable', window.plugin.ownership.onPublicChatDataAvailable);
@@ -791,4 +819,18 @@ var setup = function() {
 
 //PLUGIN END //////////////////////////////////////////////////////////
 
-@@PLUGINEND@@
+
+
+setup.info = plugin_info; //add the script info data to the function as a property
+if(!window.bootPlugins) window.bootPlugins = [];
+window.bootPlugins.push(setup);
+// if IITC has already booted, immediately run the 'setup' function
+if(window.iitcLoaded && typeof setup === 'function') setup();
+} // wrapper end
+// inject code into site context
+var script = document.createElement('script');
+var info = {};
+if (typeof GM_info !== 'undefined' && GM_info && GM_info.script) info.script = { version: GM_info.script.version, name: GM_info.script.name, description: GM_info.script.description };
+script.appendChild(document.createTextNode('('+ wrapper +')('+JSON.stringify(info)+');'));
+(document.body || document.head || document.documentElement).appendChild(script);
+
