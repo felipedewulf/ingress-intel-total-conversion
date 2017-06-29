@@ -137,6 +137,10 @@ window.plugin.ownership.onPublicChatDataAvailable = function(data) {
 
     if(portal){
       guid = window.findPortalGuidByPositionE6(portal.latE6, portal.lngE6);
+      if (!guid && window.plugin.trackowners.trackowners){
+        guid = window.plugin.trackowners.searchGuidByCoord(portal.latE6, portal.lngE6);
+        console.log("PortalOwnershipt Log info get by TrackOwners fetch: "+guid);
+      }
 	//  console.log(markup);
       if(guid){
 		//console.log(msgTS+":ownership: Call Portal updated:"+guid+" owned:"+owned+".  Portal:"+portal);
@@ -166,10 +170,14 @@ window.plugin.ownership.updateOwned = function(owned, guid, portal, captureTS) {
     guid = window.selectedPortal;
 
   var ownershipInfo = plugin.ownership.ownership[guid];
- 
-  
+
+  if (owned && !ownershipInfo && window.plugin.trackowners.trackowners){
+    console.log("ownership: New Capture info not found on current tracking",portal);
+    //TODO if ownershipInfo not exist, try TrackOwner, to ignore older captures of lost portal.
+  }
+
   if (captureTS && ownershipInfo && ownershipInfo.recordedDate &&  captureTS < ownershipInfo.recordedDate){
-	//  console.log("Ignoring update of portal "+guid+" because new TS "+captureTS+" is older than current one:"+ownershipInfo.recordedDate);
+	  console.log("Ignoring update of portal "+guid+" because new TS "+captureTS+" is older than current one:"+ownershipInfo.recordedDate);
 	  return;
   } else {
 	//  console.log("Updating portal: "+guid+" with new TS "+captureTS+" of portal:"); 

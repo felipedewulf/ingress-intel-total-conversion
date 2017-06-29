@@ -269,8 +269,6 @@ window.plugin.trackowners.checkSeenPortal = function(guid, newTS, newPortalDetai
 	}
 }	
 	
-// Primary:  latE6, lngE6, team, capturedTS, lastSeenTS, precision (SEEN, CAPTURED)
-// Secondary: health, level, resocount, title, owner
 
 window.plugin.trackowners.addNewCapturedPortal = function(guid, newowner,newCapTS, portal) {
 	if(!guid){
@@ -464,7 +462,8 @@ var trackownersPortalOwnershipTime = {
 		  var helpMsg = "";
 		  if (pInfo){
 			  if (pInfo.type=="SEEN") printValue = printValue+" +";
-			  helpMsg = plugin.trackowners.TS2Date(pInfo.capturedTS);
+			  helpMsg = plugin.trackowners.TS2Date(pInfo.capturedTS)+
+			  			"<br>"+plugin.trackowners.TS2Date(pInfo.seenTS);
 		  }
 		  $(cell)
 			.addClass('help')
